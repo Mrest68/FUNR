@@ -1,7 +1,7 @@
 import flask
 from flask import Blueprint, request, jsonify
 
-dates_bp = Blueprint('dates', __name__)
+date_bp = Blueprint('dates', __name__)
 
 
 @date_bp.route('/save-restaurants', methods=['POST'])

@@ -1,4 +1,5 @@
 import flask
+import re
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 
@@ -12,12 +13,21 @@ def extract_instagram_url(text):
 
 @instagram_bp.route('/save-instagram-data', methods=['POST'])
 def save_instagram_data():
-    data = request.form
-    message = data.get('Body')
+    # Accept form-encoded (e.g., Twilio) or JSON payloads
+    data = request.form if request.form else (request.get_json(silent=True) or {})
+    message = data.get('Body') if isinstance(data, dict) or hasattr(data, 'get') else None
+    if not message:
+        # try values as a last resort
+        message = request.values.get('Body')
     instagram_reel = extract_instagram_url(message)
     # Here you would typically save the data to a database
     
-    print("Received Instagram data:", data)
+    # Convert ImmutableMultiDict to a regular dict for logging
+    try:
+        logged = dict(data)
+    except Exception:
+        logged = data
+    print("Received Instagram data:", logged)
     print("Extracted Instagram URL:", instagram_reel)
 
     return jsonify({
