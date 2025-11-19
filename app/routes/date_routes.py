@@ -1,10 +1,10 @@
 import flask
 from flask import Blueprint, request, jsonify
 
-restaurant_bp = Blueprint('restaurant', __name__)
+dates_bp = Blueprint('dates', __name__)
 
 
-@restaurant_bp.route('/save-restaurants', methods=['POST'])
+@date_bp.route('/save-restaurants', methods=['POST'])
 def save_restaurants():
     data = request.get_json()
     # Here you would typically save the data to a database

@@ -2,7 +2,6 @@ import flask
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 
-from sympy import re
 
 instagram_bp = Blueprint('instagram', __name__)
 

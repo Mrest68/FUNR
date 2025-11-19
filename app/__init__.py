@@ -8,12 +8,10 @@ def create_app():
     CORS(app)
     
     # Register blueprints
-    from app.routes.user_routes import user_bp
-    from app.routes.date_routes import restaurant_bp
+    from app.routes.date_routes import date_bp
     from app.routes.instagram_routes import instagram_bp
     
-    app.register_blueprint(user_bp, url_prefix='/api')
-    app.register_blueprint(restaurant_bp, url_prefix='/api')
+    app.register_blueprint(date_bp, url_prefix='/api')
     app.register_blueprint(instagram_bp, url_prefix='/api')
     
     @app.route('/')
