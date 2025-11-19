@@ -8,9 +8,19 @@ instagram_bp = Blueprint('instagram', __name__)
 def extract_instagram_url(text):
     if not text:
         return None
-    pattern = r"(https?://(?:www\.)?instagram\.com/[^\s]+)"
-    match = re.search(pattern, text)
-    return match.group(0) if match else None
+    
+    # Pattern to match Instagram URLs for posts, reels, profiles, stories, etc.
+    # Handles both http/https and with/without www
+    # Stops at whitespace or common punctuation that's not part of URLs
+    pattern = r"https?://(?:www\.)?instagram\.com/(?:p|reel|reels|stories|[a-zA-Z0-9._]+)(?:/[a-zA-Z0-9._/-]+)?"
+    
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        url = match.group(0)
+        # Remove trailing punctuation that's not typically part of URLs
+        url = url.rstrip('.,;:!?)')
+        return url
+    return None
 
 
 @instagram_bp.route('/save-instagram-data', methods=['POST'])
@@ -43,5 +53,5 @@ def save_instagram_data():
     return jsonify({
         "status": "success",
         "message": "Instagram data saved successfully!",
-        "instagram_url": instagram_url
+        "instagram_url": message
     }), 200
