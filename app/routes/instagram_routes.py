@@ -26,6 +26,15 @@ def extract_instagram_url(text):
 @instagram_bp.route('/save-instagram-data', methods=['POST'])
 def save_instagram_data():
 
+    # Debug: Log all request details
+    print("=" * 50)
+    print("Content-Type:", request.content_type)
+    print("request.form:", dict(request.form))
+    print("request.get_json():", request.get_json(silent=True))
+    print("request.data:", request.data)
+    print("request.values:", dict(request.values))
+    print("=" * 50)
+
     # Twilio sends POST as x-www-form-urlencoded
     # Postman/TailEnd may send form-data or JSON
     data = {}
@@ -48,6 +57,7 @@ def save_instagram_data():
     instagram_url = extract_instagram_url(message)
 
     print("📩 Received Instagram data:", data)
+    print("📝 Message Body:", repr(message))
     print("🔗 Extracted Instagram URL:", instagram_url)
 
     return jsonify({
