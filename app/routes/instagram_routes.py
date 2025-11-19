@@ -63,5 +63,7 @@ def save_instagram_data():
     return jsonify({
         "status": "success",
         "message": "Instagram data saved successfully!",
-        "instagram_url": message
+        "instagram_url": instagram_url,
+        "text_message": message
+        
     }), 200
