@@ -3,16 +3,20 @@ import re
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from openai import OpenAI
-import instaloader
+import requests
 import os
 
 
 instagram_bp = Blueprint('instagram', __name__)
 
-# Initialize OpenAI client (new API format)
+# Initialize OpenAI client and Apify token
 openai_api_key = os.getenv("OPENAI_API_KEY")
+apify_api_token = os.getenv("APIFY_API_TOKEN")
+
 if not openai_api_key:
     raise RuntimeError("❌ OPENAI_API_KEY is not set in the environment!")
+if not apify_api_token:
+    raise RuntimeError("❌ APIFY_API_TOKEN is not set in the environment!")
 
 client = OpenAI(api_key=openai_api_key)
 
@@ -32,52 +36,57 @@ def extract_instagram_url(text):
         return url
     return None
 
-def extract_shortcode_from_url(instagram_url):
-    """Extract shortcode from Instagram URL (needed for instaloader)"""
-    if not instagram_url:
-        return None
-    
-    # Pattern to extract shortcode from /p/ or /reel/ URLs
-    pattern = r"instagram\.com/(?:p|reel|reels)/([a-zA-Z0-9_-]+)"
-    match = re.search(pattern, instagram_url, re.IGNORECASE)
-    
-    if match:
-        return match.group(1)
-    return None
-
 def get_instagram_caption(instagram_url):
-    """Fetch the caption from an Instagram post/reel with retry logic"""
+    """Fetch the caption from an Instagram post/reel using Apify API"""
     try:
-        shortcode = extract_shortcode_from_url(instagram_url)
-        if not shortcode:
-            print("❌ No shortcode found in URL")
-            return None
+        print(f"🚀 Calling Apify Instagram Scraper for: {instagram_url}")
         
-        print(f"🔑 Extracted shortcode: {shortcode}")
+        # Apify API endpoint - Run Actor synchronously and get dataset items
+        apify_url = f"https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token={apify_api_token}"
         
-        # Initialize instaloader with custom settings to avoid rate limits
-        L = instaloader.Instaloader(
-            max_connection_attempts=1,  # Don't retry on failure
-            quiet=True,  # Suppress verbose output
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'  # Custom user agent
+        # Request payload
+        payload = {
+            "directUrls": [instagram_url],
+            "resultsLimit": 1,
+            "resultsType": "posts",
+            "proxy": {"useApifyProxy": True}
+        }
+        
+        # Make POST request to Apify
+        response = requests.post(
+            apify_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=120  # Wait up to 2 minutes for scraping
         )
         
-        # Disable all downloads
-        L.download_video = False
-        L.download_comments = False
-        L.download_geotags = False
-        L.download_pictures = False
+        if response.status_code != 200:
+            print(f"❌ Apify API error: {response.status_code} - {response.text}")
+            return None
         
-        # Get post by shortcode with timeout
-        print(f"📥 Fetching public post data for shortcode: {shortcode}")
-        post = instaloader.Post.from_shortcode(L.context, shortcode)
+        # Parse response (returns array of scraped items)
+        data = response.json()
         
-        # Extract caption, tagged users, and location
-        caption = post.caption if post.caption else ""
-        tagged_users = [user.username for user in post.tagged_users] if post.tagged_users else []
-        location = post.location.name if post.location else None
+        if not data or len(data) == 0:
+            print("❌ No data returned from Apify")
+            return None
         
-        print(f"✅ Successfully fetched Instagram data")
+        post_data = data[0]
+        print(f"📦 Raw Apify data keys: {post_data.keys()}")
+        
+        # Extract relevant information from Apify response
+        caption = post_data.get("caption", "")
+        
+        # Tagged users might be in different fields depending on Apify version
+        tagged_users = []
+        if "taggedUsers" in post_data:
+            tagged_users = [user.get("username") for user in post_data.get("taggedUsers", []) if user.get("username")]
+        elif "mentions" in post_data:
+            tagged_users = [mention.get("username") for mention in post_data.get("mentions", []) if mention.get("username")]
+        
+        location = post_data.get("locationName") or (post_data.get("location", {}).get("name") if isinstance(post_data.get("location"), dict) else None)
+        
+        print(f"✅ Successfully fetched Instagram data via Apify")
         
         return {
             "caption": caption,
@@ -85,16 +94,14 @@ def get_instagram_caption(instagram_url):
             "location": location
         }
     
-    except instaloader.exceptions.ConnectionException as e:
-        print(f"❌ Instagram connection error (likely rate limited or blocked): {e}")
-        print("⚠️ Continuing with URL only - user can provide caption manually")
+    except requests.exceptions.Timeout:
+        print("❌ Apify request timed out (scraping took too long)")
         return None
-    except instaloader.exceptions.QueryReturnedForbiddenException as e:
-        print(f"❌ Instagram returned 403 Forbidden: {e}")
-        print("⚠️ Instagram is blocking requests - user should provide caption manually")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error calling Apify: {e}")
         return None
     except Exception as e:
-        print(f"❌ Error fetching Instagram data: {type(e).__name__}: {e}")
+        print(f"❌ Error calling Apify API: {type(e).__name__}: {e}")
         return None
 
 def extract_restaurant_name_with_ai(caption, tagged_users, location):
@@ -115,10 +122,11 @@ def extract_restaurant_name_with_ai(caption, tagged_users, location):
         """
         
         print("🤖 Calling OpenAI API...")
+        
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that extracts restaurant names from Instagram captions and metadata."},
+                {"role": "system", "content": "You extract restaurant names from IG content."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=50,
@@ -149,7 +157,7 @@ def extract_restuarant(instagram_url):
 def env_check():
     return {
         "OPENAI_API_KEY_set": bool(os.getenv("OPENAI_API_KEY")),
-        "INSTAGRAM_USERNAME_set": bool(os.getenv("INSTAGRAM_USERNAME"))
+        "APIFY_API_TOKEN_set": bool(os.getenv("APIFY_API_TOKEN"))
     }
 
 @instagram_bp.route('/save-instagram-data', methods=['POST'])
@@ -211,14 +219,14 @@ def save_instagram_data():
         )
         print("🍽️ Restaurant Name:", restaurant_name)
     else:
-        print("⚠️ Could not fetch Instagram data - Instagram may be blocking requests")
+        print("⚠️ Could not fetch Instagram data from Apify")
         print("💡 Tip: User can send caption in a follow-up message")
 
     return jsonify({
         "status": "success",
         "message": "Instagram URL received! " + (
             "Caption extracted successfully." if instagram_data 
-            else "Could not fetch caption (Instagram blocking). Please send the restaurant name in your next message."
+            else "Could not fetch caption. Please send the restaurant name in your next message."
         ),
         "instagram_url": instagram_url,
         "text_message": message,
