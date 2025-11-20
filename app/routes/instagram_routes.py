@@ -4,14 +4,17 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 from openai import OpenAI
 import instaloader
-from dotenv import load_dotenv
 import os
-load_dotenv()
+
 
 instagram_bp = Blueprint('instagram', __name__)
 
 # Initialize OpenAI client (new API format)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise RuntimeError("❌ OPENAI_API_KEY is not set in the environment!")
+
+client = OpenAI(api_key=openai_api_key)
 
 instagram_username = os.getenv("INSTAGRAM_USERNAME")
 instagram_password = os.getenv("INSTAGRAM_PASSWORD")
@@ -140,6 +143,13 @@ def extract_restuarant(instagram_url):
         username = match.group(1)
         return username
     return None
+
+@app.route("/env-check")
+def env_check():
+    return {
+        "OPENAI_API_KEY_set": bool(os.getenv("OPENAI_API_KEY")),
+        "INSTAGRAM_USERNAME_set": bool(os.getenv("INSTAGRAM_USERNAME"))
+    }
 
 @instagram_bp.route('/save-instagram-data', methods=['POST'])
 def save_instagram_data():
