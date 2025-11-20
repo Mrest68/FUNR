@@ -16,8 +16,7 @@ if not openai_api_key:
 
 client = OpenAI(api_key=openai_api_key)
 
-instagram_username = os.getenv("INSTAGRAM_USERNAME")
-instagram_password = os.getenv("INSTAGRAM_PASSWORD")
+
 
 
 def extract_instagram_url(text):
@@ -47,7 +46,7 @@ def extract_shortcode_from_url(instagram_url):
     return None
 
 def get_instagram_caption(instagram_url):
-    """Fetch the caption from an Instagram post/reel"""
+    """Fetch the caption from an Instagram post/reel - NO LOGIN REQUIRED for public content"""
     try:
         shortcode = extract_shortcode_from_url(instagram_url)
         if not shortcode:
@@ -56,35 +55,25 @@ def get_instagram_caption(instagram_url):
         
         print(f"🔑 Extracted shortcode: {shortcode}")
         
-        # Initialize instaloader
+        # Initialize instaloader WITHOUT login - works for public content
         L = instaloader.Instaloader()
         
+        # Disable unnecessary downloads
         L.download_video = False
         L.download_comments = False
-        L.download_geotags = False  
-        # Login if credentials are provided (helps avoid rate limits)
-        if instagram_username and instagram_password:
-            session_file = f"{instagram_username}.session"
-            try:
-                print(f"🔐 Loading session for {instagram_username}...")
-                L.load_session_from_file(instagram_username)
-                print("✅ Session loaded successfully!")
-            except FileNotFoundError:
-                print(f"🔐 No session found, logging in as {instagram_username}...")
-                L.login(instagram_username, instagram_password)
-                L.save_session_to_file(session_file)
-                print("✅ Login successful and session saved!")
+        L.download_geotags = False
+        L.download_pictures = False
         
-        # Get post by shortcode
-        print(f"📥 Fetching post data for shortcode: {shortcode}")
+        # Get post by shortcode - NO LOGIN NEEDED for public reels
+        print(f"📥 Fetching public post data for shortcode: {shortcode}")
         post = instaloader.Post.from_shortcode(L.context, shortcode)
         
-        # Extract caption and tagged users
+        # Extract caption, tagged users, and location
         caption = post.caption if post.caption else ""
         tagged_users = [user.username for user in post.tagged_users] if post.tagged_users else []
         location = post.location.name if post.location else None
         
-        print(f"✅ Successfully fetched Instagram data")
+        print(f"✅ Successfully fetched Instagram data (no login required)")
         
         return {
             "caption": caption,
