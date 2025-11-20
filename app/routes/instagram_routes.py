@@ -144,7 +144,7 @@ def extract_restuarant(instagram_url):
         return username
     return None
 
-@app.route("/env-check")
+@instagram_bp.route("/env-check")
 def env_check():
     return {
         "OPENAI_API_KEY_set": bool(os.getenv("OPENAI_API_KEY")),
