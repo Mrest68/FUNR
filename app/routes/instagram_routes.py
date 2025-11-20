@@ -46,7 +46,7 @@ def extract_shortcode_from_url(instagram_url):
     return None
 
 def get_instagram_caption(instagram_url):
-    """Fetch the caption from an Instagram post/reel - NO LOGIN REQUIRED for public content"""
+    """Fetch the caption from an Instagram post/reel with retry logic"""
     try:
         shortcode = extract_shortcode_from_url(instagram_url)
         if not shortcode:
@@ -55,16 +55,20 @@ def get_instagram_caption(instagram_url):
         
         print(f"🔑 Extracted shortcode: {shortcode}")
         
-        # Initialize instaloader WITHOUT login - works for public content
-        L = instaloader.Instaloader()
+        # Initialize instaloader with custom settings to avoid rate limits
+        L = instaloader.Instaloader(
+            max_connection_attempts=1,  # Don't retry on failure
+            quiet=True,  # Suppress verbose output
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'  # Custom user agent
+        )
         
-        # Disable unnecessary downloads
+        # Disable all downloads
         L.download_video = False
         L.download_comments = False
         L.download_geotags = False
         L.download_pictures = False
         
-        # Get post by shortcode - NO LOGIN NEEDED for public reels
+        # Get post by shortcode with timeout
         print(f"📥 Fetching public post data for shortcode: {shortcode}")
         post = instaloader.Post.from_shortcode(L.context, shortcode)
         
@@ -73,7 +77,7 @@ def get_instagram_caption(instagram_url):
         tagged_users = [user.username for user in post.tagged_users] if post.tagged_users else []
         location = post.location.name if post.location else None
         
-        print(f"✅ Successfully fetched Instagram data (no login required)")
+        print(f"✅ Successfully fetched Instagram data")
         
         return {
             "caption": caption,
@@ -81,6 +85,14 @@ def get_instagram_caption(instagram_url):
             "location": location
         }
     
+    except instaloader.exceptions.ConnectionException as e:
+        print(f"❌ Instagram connection error (likely rate limited or blocked): {e}")
+        print("⚠️ Continuing with URL only - user can provide caption manually")
+        return None
+    except instaloader.exceptions.QueryReturnedForbiddenException as e:
+        print(f"❌ Instagram returned 403 Forbidden: {e}")
+        print("⚠️ Instagram is blocking requests - user should provide caption manually")
+        return None
     except Exception as e:
         print(f"❌ Error fetching Instagram data: {type(e).__name__}: {e}")
         return None
@@ -198,14 +210,21 @@ def save_instagram_data():
             location
         )
         print("🍽️ Restaurant Name:", restaurant_name)
+    else:
+        print("⚠️ Could not fetch Instagram data - Instagram may be blocking requests")
+        print("💡 Tip: User can send caption in a follow-up message")
 
     return jsonify({
         "status": "success",
-        "message": "Instagram data saved successfully!",
+        "message": "Instagram URL received! " + (
+            "Caption extracted successfully." if instagram_data 
+            else "Could not fetch caption (Instagram blocking). Please send the restaurant name in your next message."
+        ),
         "instagram_url": instagram_url,
         "text_message": message,
         "caption": caption,
         "tagged_users": tagged_users,
         "location": location,
-        "restaurant_name": restaurant_name
+        "restaurant_name": restaurant_name,
+        "needs_manual_caption": instagram_data is None
     }), 200
