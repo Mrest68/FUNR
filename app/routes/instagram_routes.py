@@ -60,7 +60,8 @@ def get_instagram_caption(instagram_url):
             timeout=120  # Wait up to 2 minutes for scraping
         )
         
-        if response.status_code != 200:
+        # Apify returns 200 or 201 for success
+        if response.status_code not in [200, 201]:
             print(f"❌ Apify API error: {response.status_code} - {response.text}")
             return None
         
@@ -111,22 +112,29 @@ def extract_restaurant_name_with_ai(caption, tagged_users, location):
             print("❌ OpenAI API key not found")
             return "Unknown"
         
-        prompt = f"""
-        Extract the restaurant name from the following Instagram reel data:
-        
-        Caption: {caption}
-        Tagged Users: {', '.join(tagged_users) if tagged_users else 'None'}
-        Location: {location if location else 'None'}
-        
-        Return ONLY the restaurant name, nothing else. If no restaurant is mentioned, return "Unknown".
-        """
+        prompt = f"""You are analyzing Instagram content to find restaurant names.
+
+Caption: {caption}
+Tagged Users: {', '.join(tagged_users) if tagged_users else 'None'}
+Location: {location if location else 'None'}
+
+Extract the restaurant name from this data. Look for:
+1. Tagged restaurant accounts (usually @restaurantname)
+2. Restaurant names mentioned in the caption
+3. Location tags that indicate restaurants
+
+Return ONLY the restaurant name as clean text (no @ symbol, no extra words).
+If multiple restaurants are mentioned, return the main one being featured.
+If no restaurant is found, return "Unknown".
+
+Restaurant name:"""
         
         print("🤖 Calling OpenAI API...")
         
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You extract restaurant names from IG content."},
+                {"role": "system", "content": "You are an expert at extracting restaurant names from Instagram posts. Return only the restaurant name, nothing else."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=50,
